@@ -6,23 +6,11 @@ dotenv.config();
 const userService = require("./user-service.js");
 const jwt = require('jsonwebtoken');
 
+
 const HTTP_PORT = process.env.PORT || 8080;
-const passport = require('passport');
-const { Strategy: JwtStrategy, ExtractJwt } = require('passport-jwt');
 
 app.use(express.json());
 app.use(cors());
-
-
-passport.use(new JwtStrategy({
-    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-    secretOrKey: process.env.JWT_SECRET
-}, (jwt_payload, done) => {
-    // For simplicity, we are passing the payload through. In a real app, you might check the user ID in the payload against your database.
-    return done(null, jwt_payload);
-}));
-
-app.use(passport.initialize());
 
 app.post("/api/user/register", (req, res) => {
     userService.registerUser(req.body)
@@ -33,20 +21,23 @@ app.post("/api/user/register", (req, res) => {
     });
 });
 
-app.post("/api/user/login", (req, res) => {
-    userService.checkUser(req.body)
-    .then(user => {
-        const payload = {
-            _id: user._id,
-            userName: user.userName
-        };
-        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
-        res.json({ message: "login successful", token: token });
-    }).catch(msg => {
-        res.status(422).json({ message: msg });
-    });
+app.post('/api/user/login', async (req, res) => {
+    try {
+        const user = await userService.checkUser(req.body);  // Verify user credentials
+        if (user) {
+            const token = jwt.sign(
+                { _id: user._id, username: user.username },
+                process.env.JWT_SECRET,  // Ensure you have JWT_SECRET in your .env
+                { expiresIn: '24h' }
+            );
+            res.json({ message: "Login successful", token });
+        } else {
+            res.status(401).json({ message: "Authentication failed" });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 });
-
 
 app.get("/api/user/favourites", (req, res) => {
     userService.getFavourites(req.user._id)
